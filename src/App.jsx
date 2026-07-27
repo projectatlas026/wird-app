@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { createRoot } from "react-dom/client";
 import { 
     SURAH_NAMES, 
     AYAH_COUNTS,
@@ -12,7 +11,7 @@ import {
     StorageService,
     ReschedulingService,
     DiagnosticService
-} from "./src/services/index.js";
+} from "./services/index.js";
 
 const BUILD_INFO = {
     version: "0.1.0",
@@ -390,6 +389,3 @@ const CSS = `
         .btns-grp { display: grid; grid-template-columns: 1fr 1fr; }
     }
 `;
-
-const root = createRoot(document.getElementById('root'));
-root.render(<App />);
