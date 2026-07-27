@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وِرد — معاينة التطبيق</title>
+    <!-- React and Babel from CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #0E1726; }
+        #root { min-height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // Mocking the storage object expected by the app
+        window.storage = {
+            get: (key) => Promise.resolve({ value: localStorage.getItem(key) }),
+            set: (key, val) => Promise.resolve(localStorage.setItem(key, val))
+        };
+
+        // --- PASTE OF wird-v3.jsx CODE BEGINS ---
+        /* Note: In a real project, this would be imported. 
+           For this preview, we are embedding the component logic. */
+        
+        // We need to re-define the constants and components from the JSX file here
+        // to make them available to the Babel transpiler in this HTML scope.
+    </script>
+
+    <!-- We will inject the actual component code into a script tag -->
+    <script type="text/babel">
+        // Since I can't "import" locally in a single HTML file easily, 
+        // I will write a script to load the JSX content.
+        fetch('wird-v3.jsx')
+            .then(response => response.text())
+            .then(code => {
+                // Remove 'export' keywords which aren't supported in browser Babel directly like this
+                const cleanCode = code.replace(/export /g, '');
+                const script = document.createElement('script');
+                script.type = 'text/babel';
+                script.innerHTML = cleanCode + `
+                    const container = document.getElementById('root');
+                    const root = ReactDOM.createRoot(container);
+                    root.render(<App />);
+                `;
+                document.body.appendChild(script);
+            });
+    </script>
+</body>
+</html>

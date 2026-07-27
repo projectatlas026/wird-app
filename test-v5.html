@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وِرد v5 — منظومة الروايات والأهداف</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #0E1726; color: #EFE7D5; font-family: sans-serif; }
+        #root { min-height: 100vh; }
+        .boot { display: grid; place-items: center; height: 100vh; font-size: 20px; }
+    </style>
+</head>
+<body>
+    <div id="root"><div class="boot">جاري تحميل المنظومة v5...</div></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        /* --- القراءات والروايات --- */
+        const READINGS = [
+            { id: 'asim', name: 'عاصم الكوفي' },
+            { id: 'nafi', name: 'نافع المدني' }
+        ];
+        const RIWAYAT = [
+            { id: 'hafs', readingId: 'asim', name: 'حفص عن عاصم', mushaf: 'مصحف المدينة (حفص)' },
+            { id: 'shuba', readingId: 'asim', name: 'شعبة عن عاصم', mushaf: 'مصحف المدينة (شعبة)' },
+            { id: 'warsh', readingId: 'nafi', name: 'ورش عن نافع', mushaf: 'مصحف المدينة (ورش)' },
+            { id: 'qalun', readingId: 'nafi', name: 'قالون عن نافع', mushaf: 'مصحف المدينة (قالون)' }
+        ];
+
+        /* --- بيانات القرآن --- */
+        const SURAH_NAMES = ["الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"];
+        const AYAH_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+        const JUZ_BOUNDARIES = [
+            { n: 1, s: 1, a: 1, es: 2, ea: 141 },
+            { n: 2, s: 2, a: 142, es: 2, ea: 252 },
+            { n: 30, s: 78, a: 1, es: 114, ea: 6 }
+        ];
+
+        const ar = (n) => n === null || n === undefined ? "" : String(n);
+        const today = () => new Date().toISOString().slice(0, 10);
+        const addDays = (s, n) => new Date((Math.floor(Date.parse(s + "T00:00:00Z") / 86400000) + n) * 86400000).toISOString().slice(0, 10);
+
+        const QuranGoalResolutionService = {
+            resolve(type, params) {
+                let res = { startSurah: 1, startAyah: 1, endSurah: 1, endAyah: 7 };
+                if (type === 'FULL_QURAN') res = { startSurah: 1, startAyah: 1, endSurah: 114, endAyah: 6 };
+                else if (type === 'SINGLE_JUZ') {
+                    const j = JUZ_BOUNDARIES.find(x => x.n === params.juzNumber);
+                    if (j) res = { startSurah: j.s, startAyah: j.a, endSurah: j.es, endAyah: j.ea };
+                }
+                else if (type === 'SINGLE_SURAH') res = { startSurah: params.surahId, startAyah: 1, endSurah: params.surahId, endAyah: AYAH_COUNTS[params.surahId-1] };
+                return res;
+            }
+        };
+
+        function PlanWizardV5({ onComplete }) {
+            const [step, setStep] = useState(1);
+            const [form, setForm] = useState({
+                readingId: 'asim', riwayahId: 'hafs', goalType: 'SINGLE_JUZ', juzNumber: 30, surahId: 1,
+                startSurah: 78, startAyah: 1, endSurah: 114, endAyah: 6, startDate: today(),
+                mode: 'date', targetEndDate: addDays(today(), 30), dailyAmount: 5
+            });
+            const filteredRiwayat = RIWAYAT.filter(r => r.readingId === form.readingId);
+            return (
+                <div className="wizard card">
+                    <div className="wizard-header"><h2>الخطوة {ar(step)}: {step===1?'الرواية':step===2?'نوع الهدف':step===3?'النطاق':step===4?'الجدول':'المعاينة'}</h2></div>
+                    <div className="step-content">
+                        {step===1 && <>
+                            <label>القراءة</label>
+                            <select value={form.readingId} onChange={e=>setForm({...form, readingId:e.target.value})}>{READINGS.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select>
+                            <label>الرواية</label>
+                            <select value={form.riwayahId} onChange={e=>setForm({...form, riwayahId:e.target.value})}>{filteredRiwayat.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}</select>
+                            <div className="info-box">المصحف: {RIWAYAT.find(r=>r.id===form.riwayahId)?.mushaf}</div>
+                        </>}
+                        {step===2 && <>
+                            {['FULL_QURAN','SINGLE_JUZ','SINGLE_SURAH'].map(id=><button key={id} className={form.goalType===id?"opt active":"opt"} onClick={()=>setForm({...form, goalType:id})}>{id==='FULL_QURAN'?'القرآن كاملاً':id==='SINGLE_JUZ'?'جزء محدد':'سورة محددة'}</button>)}
+                        </>}
+                        {step===3 && <>
+                            {form.goalType==='SINGLE_JUZ' && <select value={form.juzNumber} onChange={e=>setForm({...form, juzNumber:+e.target.value})}>{[1,2,30].map(n=><option key={n} value={n}>الجزء {ar(n)}</option>)}</select>}
+                            {form.goalType==='SINGLE_SURAH' && <select value={form.surahId} onChange={e=>setForm({...form, surahId:+e.target.value})}>{SURAH_NAMES.map((n,i)=><option key={i+1} value={i+1}>{n}</option>)}</select>}
+                            {form.goalType==='FULL_QURAN' && <p>حفظ المصحف الشريف كاملاً</p>}
+                        </>}
+                        {step===4 && <input type="date" value={form.targetEndDate} onChange={e=>setForm({...form, targetEndDate:e.target.value})} />}
+                        {step===5 && <div className="summary"><div>الرواية: {RIWAYAT.find(r=>r.id===form.riwayahId)?.name}</div><div>الهدف: {form.goalType}</div></div>}
+                    </div>
+                    <div className="footer">
+                        {step>1 && <button className="btn" onClick={()=>setStep(s=>s-1)}>السابق</button>}
+                        <button className="btn primary" onClick={step<5?()=>setStep(s=>s+1):()=>onComplete({...form, ...QuranGoalResolutionService.resolve(form.goalType, form)})}>{step<5?'التالي':'إنشاء الخطة'}</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [st, setSt] = useState(null);
+            useEffect(() => { const saved = localStorage.getItem("wird_v5"); setSt(saved?JSON.parse(saved):{plan:null, tasks:[]}); }, []);
+            useEffect(() => { if(st) localStorage.setItem("wird_v5", JSON.stringify(st)); }, [st]);
+            if(!st) return null;
+            return (
+                <div className="app" dir="rtl">
+                    <style>{CSS}</style>
+                    <header className="topbar"><h1>وِرد v5</h1></header>
+                    {!st.plan ? <PlanWizardV5 onComplete={p=>setSt({plan:p, tasks:[{date:today(), ...p}]})} /> : (
+                        <div className="screen">
+                            <div className="card"><h3>الخطة: {RIWAYAT.find(r=>r.id===st.plan.riwayahId)?.name}</h3><p>الهدف: {SURAH_NAMES[st.plan.startSurah-1]} إلى {SURAH_NAMES[st.plan.endSurah-1]}</p></div>
+                            <button className="btn" onClick={()=>{localStorage.clear(); location.reload();}}>إعادة البدء</button>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const CSS = `
+            body{ --bg:#0E1726; --surface:#152139; --primary:#C9A227; --text:#EFE7D5; background:var(--bg); color:var(--text); padding-bottom:50px;}
+            .topbar{ padding:20px; text-align:center; color:var(--primary); }
+            .card{ background:var(--surface); border-radius:20px; padding:20px; margin:15px; border:1px solid rgba(201,162,39,0.1); }
+            .wizard{ max-width:450px; margin:20px auto; }
+            .step-content{ margin:20px 0; display:flex; flex-direction:column; gap:10px; }
+            select, input{ background:var(--bg); color:white; padding:12px; border:1px solid #1D2E4B; border-radius:10px; }
+            .btn{ border:none; padding:12px 20px; border-radius:10px; cursor:pointer; font-weight:bold; background:#1D2E4B; color:white; }
+            .btn.primary{ background:var(--primary); color:black; }
+            .footer{ display:flex; justify-content:space-between; }
+            .opt{ background:#1D2E4B; color:white; border:1px solid transparent; padding:15px; border-radius:12px; text-align:right; margin-bottom:5px; cursor:pointer; }
+            .opt.active{ border-color:var(--primary); background:rgba(201,162,39,0.1); }
+            .info-box{ font-size:12px; color:var(--primary); background:rgba(201,162,39,0.05); padding:10px; border-radius:8px; }
+        `;
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

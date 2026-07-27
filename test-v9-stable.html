@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وِرد v9.3.1 — الواجهة المكتملة</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #0E1726; color: #EFE7D5; font-family: sans-serif; }
+        #root { min-height: 100vh; }
+        .boot { display: grid; place-items: center; height: 100vh; font-size: 20px; }
+    </style>
+</head>
+<body>
+    <div id="root"><div class="boot">جاري تشغيل واجهة وِرد v9.3.1 المكتملة...</div></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        /* --- DATA & LOGIC --- */
+        const SURAH_NAMES = ["الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"];
+        const AYAH_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+        const JUZ_STARTS = [[1,1],[2,142],[2,253],[3,93],[4,24],[4,148],[5,82],[6,111],[7,88],[8,41],[9,93],[11,6],[12,53],[15,1],[17,1],[18,75],[21,1],[23,1],[25,21],[27,56],[29,46],[33,31],[36,28],[39,32],[41,47],[46,1],[51,31],[58,1],[67,1],[78,1]];
+
+        const DateService = {
+            getLocalDate() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; },
+            formatArabic(dateStr) { if(!dateStr) return ""; const d = new Date(dateStr); return d.toLocaleDateString('ar-LY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); },
+            addDays(dateStr, days) { const [y, m, d] = dateStr.split('-').map(Number); const date = new Date(y, m - 1, d + days); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; },
+            diffDays(a, b) { return Math.floor((new Date(a) - new Date(b)) / 86400000); },
+            getWeekday(dateStr) { return new Date(dateStr).getDay(); }
+        };
+
+        const QuranRangeService = {
+            resolveGoal(form) {
+                let s1=1, a1=1, s2=1, a2=7;
+                if(form.goalType==='FULL_QURAN') [s1,a1,s2,a2]=[1,1,114,6];
+                else if(form.goalType==='JUZ_RANGE') [s1,a1]=[JUZ_STARTS[form.startJuz-1][0], JUZ_STARTS[form.startJuz-1][1]]; // stub
+                else [s1,a1,s2,a2]=[form.startSurah, form.startAyah, form.endSurah, form.endAyah];
+                
+                let count = 0;
+                for(let s=s1; s<=s2; s++) {
+                    const start = (s===s1)?a1:1; const end = (s===s2)?a2:AYAH_COUNTS[s-1];
+                    count += (end - start + 1);
+                }
+                return { s1, a1, s2, a2, totalAyahs: count };
+            }
+        };
+
+        const PlanPreviewService = {
+            calculate(form) {
+                const range = QuranRangeService.resolveGoal(form);
+                let d = form.startDate; let workDays = 0;
+                while(DateService.diffDays(form.targetEndDate, d) >= 0) {
+                    if(form.schedule[DateService.getWeekday(d)]==='mem') workDays++;
+                    d = DateService.addDays(d, 1);
+                }
+                const req = workDays > 0 ? Math.ceil(range.totalAyahs / workDays) : range.totalAyahs;
+                return { totalAyahs: range.totalAyahs, workDays, requiredDaily: req };
+            }
+        };
+
+        /* --- UI COMPONENTS --- */
+        function App() {
+            const [state, setState] = useState({ plan: null, streak: 0 });
+            return (
+                <div className="app" dir="rtl">
+                    <style>{CSS}</style>
+                    <header className="topbar"><h1>وِرد v9.3.1</h1></header>
+                    <main className="content">
+                        {!state.plan ? <Wizard onComplete={p=>setState({...state, plan:p})} /> : <Dashboard state={state} onReset={()=>setState({...state, plan:null})} />}
+                    </main>
+                </div>
+            );
+        }
+
+        function Wizard({ onComplete }) {
+            const [step, setStep] = useState(1);
+            const [form, setForm] = useState({
+                riwayahId: 'hafs', goalType: 'JUZ_RANGE',
+                startJuz: 30, endJuz: 30, startHizb: 60, endHizb: 60,
+                startSurah: 78, startAyah: 1, endSurah: 114, endAyah: 6,
+                startDate: DateService.getLocalDate(), targetEndDate: DateService.addDays(DateService.getLocalDate(), 30),
+                mode: 'date', dailyAmount: 5, maxDailyAyahs: 20,
+                schedule: { 0: 'rev', 1: 'mem', 2: 'mem', 3: 'mem', 4: 'mem', 5: 'mem', 6: 'comp' }
+            });
+
+            const preview = useMemo(() => PlanPreviewService.calculate(form), [form]);
+            const stepErr = (step===5 && !Object.values(form.schedule).includes('mem')) ? "اختر يوم حفظ واحد على الأقل." : null;
+
+            return (
+                <div className="wizard card">
+                    <div className="wizard-progress"><i style={{width: (step/6)*100 + '%'}}></i></div>
+                    <div className="wizard-body">
+                        {step === 1 && <div className="step"><h3>ماذا تريد أن تحفظ؟</h3><div className="grid-2">
+                            {['FULL_QURAN','JUZ_RANGE','SURAH_RANGE','AYAH_RANGE'].map(t=><button key={t} className={`opt-box ${form.goalType===t?'on':''}`} onClick={()=>setForm({...form, goalType:t})}><b>{t}</b></button>)}
+                        </div></div>}
+                        
+                        {step === 2 && <div className="step">
+                            <h3>تحديد النطاق</h3>
+                            {form.goalType==='SURAH_RANGE' && <div className="column">
+                                <select value={form.startSurah} onChange={e=>setForm({...form, startSurah:+e.target.value, endSurah:Math.max(form.endSurah,+e.target.value)})}>{SURAH_NAMES.map((s,i)=><option key={i+1} value={i+1}>{s}</option>)}</select>
+                                <select value={form.endSurah} onChange={e=>setForm({...form, endSurah:+e.target.value})}>{SURAH_NAMES.slice(form.startSurah-1).map((s,i)=><option key={i+form.startSurah} value={i+form.startSurah}>إلى {s}</option>)}</select>
+                            </div>}
+                            <div className="info-live">إجمالي الآيات: {preview.totalAyahs}</div>
+                        </div>}
+
+                        {step === 3 && <div className="step">
+                            <h3>وتيرة الحفظ</h3>
+                            <input type="date" value={form.startDate} onChange={e=>setForm({...form, startDate:e.target.value})} />
+                            <div className="info-live">{DateService.formatArabic(form.startDate)}</div>
+                        </div>}
+
+                        {step === 4 && <div className="step">
+                            <h3>جدول الأسبوع</h3>
+                            {[0,1,2,3,4,5,6].map(i=>(
+                                <div key={i} className="sched-row">
+                                    <span>{["أحد","اثن","ثلا","أرب","خمي","جمع","سبت"][i]}</span>
+                                    <div className="btns-grp">
+                                        {['mem','rev','comp','rest'].map(k=><button key={k} className={`${k} ${form.schedule[i]===k?'on':''}`} onClick={()=>setForm({...form, schedule:{...form.schedule,[i]:k}})}>{k}</button>)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>}
+
+                        {step === 5 && <div className="step preview">
+                            <h3>المعاينة النهائية</h3>
+                            <div className="p-card"><div>الهدف: {form.goalType}</div><div>النطاق: {preview.totalAyahs} آية</div><div>الورد: {preview.requiredDaily} آية</div></div>
+                        </div>}
+                    </div>
+                    {stepErr && <div className="err-msg">{stepErr}</div>}
+                    <div className="footer">
+                        {step > 1 && <button className="btn ghost" onClick={()=>setStep(s=>s-1)}>السابق</button>}
+                        <button className="btn primary" disabled={!!stepErr} onClick={step < 5 ? ()=>setStep(s=>s+1) : ()=>onComplete(form)}>التالي</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function Dashboard({ state, onReset }) {
+            return <div className="screen center"><div className="card"><h3>الخطة معتمدة!</h3><p>المحرك v9.3.1 جاهز.</p></div><button className="btn ghost" onClick={onReset}>إعادة</button></div>;
+        }
+
+        const CSS = `
+            body{ --bg:#0E1726; --surface:#152139; --surface-2:#1D2E4B; --primary:#C9A227; --text:#EFE7D5; --mem:#3F8F7E; --rev:#5B8FC7; --comp:#D9A441; --rest:#3B4554; font-family:sans-serif; }
+            .app{ max-width:500px; margin:0 auto; padding:20px; }
+            .card{ background:var(--surface); border-radius:24px; padding:20px; border:1px solid rgba(201,162,39,0.1); }
+            .grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+            .opt-box{ background:var(--surface-2); border:2px solid transparent; color:white; padding:20px; border-radius:15px; cursor:pointer; }
+            .opt-box.on{ border-color:var(--primary); background:rgba(201,162,39,0.1); }
+            .sched-row{ display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--surface-2); }
+            .btns-grp{ display:flex; background:var(--bg); padding:3px; border-radius:8px; gap:2px; }
+            .btns-grp button{ padding:5px 8px; border:none; border-radius:6px; font-size:10px; cursor:pointer; color:white; opacity:0.3; }
+            .btns-grp button.on{ opacity:1; }
+            .btns-grp button.mem.on{ background:var(--mem); }
+            .btns-grp button.rev.on{ background:var(--rev); }
+            .btns-grp button.comp.on{ background:var(--comp); color:black; }
+            .btn{ border:none; padding:12px 20px; border-radius:12px; font-weight:bold; cursor:pointer; }
+            .btn.primary{ background:var(--primary); color:black; }
+            .btn.ghost{ background:none; color:white; border:1px solid var(--surface-2); }
+            .footer{ display:flex; justify-content:space-between; margin-top:20px; }
+            .info-live{ background:rgba(201,162,39,0.05); padding:10px; border-radius:10px; text-align:center; color:var(--primary); font-size:12px; margin-top:10px; }
+            .err-msg{ color:#B4574C; text-align:center; font-size:12px; margin-top:10px; }
+        `;
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

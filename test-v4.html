@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وِرد v4 — الخطة المخصصة</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #0E1726; color: #EFE7D5; font-family: sans-serif; }
+        #root { min-height: 100vh; }
+        .boot { display: grid; place-items: center; height: 100vh; font-size: 20px; }
+    </style>
+</head>
+<body>
+    <div id="root"><div class="boot">جاري تحميل المنظومة...</div></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        /* --- بيانات القرآن --- */
+        const SURAH_NAMES = ["الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"];
+        const AYAH_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+        const surahName = (n) => SURAH_NAMES[n - 1] || "";
+        const ayahCount = (n) => AYAH_COUNTS[n - 1] || 0;
+
+        const ar = (n) => n === null || n === undefined ? "" : String(n);
+        const today = () => new Date().toISOString().slice(0, 10);
+        const addDays = (s, n) => new Date((Math.floor(Date.parse(s + "T00:00:00Z") / 86400000) + n) * 86400000).toISOString().slice(0, 10);
+        const diffDays = (a, b) => Math.floor((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 86400000);
+        const WEEKDAYS = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+        const weekdayOf = (ds) => new Date(ds + "T00:00:00Z").getUTCDay();
+
+        /* --- محرك المراجعة --- */
+        function reviewEngine(unit, rating) {
+            const intervals = [1, 3, 7, 14, 30, 60, 90, 180];
+            let nextIdx = 0;
+            if (unit.lastInterval) {
+                const curIdx = intervals.indexOf(unit.lastInterval);
+                if (rating >= 3) nextIdx = Math.min(intervals.length - 1, curIdx + (rating === 4 ? 1 : 0));
+                else if (rating === 2) nextIdx = Math.max(0, curIdx - 1);
+                else nextIdx = 0;
+            } else { nextIdx = rating >= 3 ? 1 : 0; }
+            return { nextInterval: intervals[nextIdx], nextReview: addDays(today(), intervals[nextIdx]), mastery: rating * 25 };
+        }
+
+        /* --- توليد المهام --- */
+        function generatePlanTasks(params) {
+            const tasks = [];
+            const { startSurah, startAyah, endSurah, endAyah, startDate, targetEndDate, dailyAmount, mode, schedule } = params;
+            const ranges = [];
+            for (let s = startSurah; s <= endSurah; s++) {
+                const first = s === startSurah ? startAyah : 1;
+                const last = s === endSurah ? endAyah : ayahCount(s);
+                for (let a = first; a <= last; a++) ranges.push({ s, a });
+            }
+            let ayahIdx = 0, currentDate = startDate, daySafety = 0;
+            while (ayahIdx < ranges.length && daySafety < 1000) {
+                const dayType = schedule[weekdayOf(currentDate)];
+                if (dayType === 'mem') {
+                    const amount = mode === 'date' ? Math.ceil((ranges.length - ayahIdx) / Math.max(1, diffDays(targetEndDate, currentDate))) : dailyAmount;
+                    const start = ranges[ayahIdx];
+                    const endIdx = Math.min(ranges.length - 1, ayahIdx + amount - 1);
+                    const end = ranges[endIdx];
+                    tasks.push({ date: currentDate, type: 'NEW_MEMORIZATION', startSurah: start.s, startAyah: start.a, endSurah: end.s, endAyah: end.a, status: 'PENDING' });
+                    ayahIdx += amount;
+                } else if (dayType === 'rev') tasks.push({ date: currentDate, type: 'RECENT_REVISION', status: 'PENDING' });
+                else if (dayType === 'comp') tasks.push({ date: currentDate, type: 'COMPENSATION', status: 'PENDING' });
+                currentDate = addDays(currentDate, 1);
+                daySafety++;
+            }
+            return tasks;
+        }
+
+        /* --- واجهة المعالج --- */
+        function PlanWizard({ onComplete }) {
+            const [step, setStep] = useState(1);
+            const [form, setForm] = useState({
+                startSurah: 78, startAyah: 1, endSurah: 114, endAyah: 6, level: 'beginner', dailyCapacity: 5,
+                mode: 'date', startDate: today(), targetEndDate: addDays(today(), 30), dailyAmount: 5,
+                schedule: { 0: 'rev', 1: 'mem', 2: 'mem', 3: 'mem', 4: 'mem', 5: 'mem', 6: 'comp' }
+            });
+            return (
+                <div className="wizard card">
+                    <div className="wizard-header"><span className="steps-indicator">الخطوة {ar(step)} من 5</span>
+                    <h2>{step===1?"النطاق":step===2?"المستوى":step===3?"المدة":step===4?"الجدول":"التأكيد"}</h2></div>
+                    <div className="step-content">
+                        {step===1 && <>
+                            <label>من سورة</label>
+                            <select value={form.startSurah} onChange={e=>setForm({...form, startSurah:+e.target.value})}>
+                                {SURAH_NAMES.map((n,i)=><option key={i} value={i+1}>{ar(i+1)}. {n}</option>)}
+                            </select>
+                            <label>إلى سورة</label>
+                            <select value={form.endSurah} onChange={e=>setForm({...form, endSurah:+e.target.value})}>
+                                {SURAH_NAMES.map((n,i)=><option key={i} value={i+1}>{ar(i+1)}. {n}</option>)}
+                            </select>
+                        </>}
+                        {step===2 && <>
+                            <div className="options-grid">
+                                {['beginner', 'advanced'].map(l=><button key={l} className={form.level===l?"opt-btn active":"opt-btn"} onClick={()=>setForm({...form, level:l})}>{l==='beginner'?'مبتدئ':'متقدم'}</button>)}
+                            </div>
+                            <label>قدرتك اليومية (آيات)</label>
+                            <input type="number" value={form.dailyCapacity} onChange={e=>setForm({...form, dailyCapacity:+e.target.value})} />
+                        </>}
+                        {step===3 && <>
+                            <div className="seg-control">
+                                <button className={form.mode==='date'?"active":""} onClick={()=>setForm({...form, mode:'date'})}>تحديد تاريخ</button>
+                                <button className={form.mode==='amount'?"active":""} onClick={()=>setForm({...form, mode:'amount'})}>تحديد مقدار</button>
+                            </div>
+                            {form.mode==='date'?<input type="date" value={form.targetEndDate} onChange={e=>setForm({...form, targetEndDate:e.target.value})}/>:<input type="number" value={form.dailyAmount} onChange={e=>setForm({...form, dailyAmount:+e.target.value})}/>}
+                        </>}
+                        {step===4 && WEEKDAYS.map((d,i)=>(
+                            <div key={i} className="day-config"><span>{d}</span>
+                                <select value={form.schedule[i]} onChange={e=>setForm({...form, schedule:{...form.schedule,[i]:e.target.value}})}>
+                                    <option value="mem">حفظ</option><option value="rev">مراجعة</option><option value="rest">راحة</option>
+                                </select>
+                            </div>
+                        ))}
+                        {step===5 && <div className="summary-box"><p>جاهز لإنشاء خطتك المخصصة؟</p></div>}
+                    </div>
+                    <div className="wizard-footer">
+                        {step>1 && <button className="btn ghost" onClick={()=>setStep(s=>s-1)}>السابق</button>}
+                        <button className="btn primary" onClick={step<5?()=>setStep(s=>s+1):()=>onComplete(form)}>{step<5?'التالي':'إنشاء الخطة'}</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [st, setSt] = useState(null);
+            const [tab, setTab] = useState("home");
+            useEffect(() => { const saved = localStorage.getItem("wird_v4"); setSt(saved?JSON.parse(saved):{plan:null, units:[], tasks:[], streak:{current:0}}); }, []);
+            useEffect(() => { if(st) localStorage.setItem("wird_v4", JSON.stringify(st)); }, [st]);
+
+            if(!st) return null;
+
+            const todayTasks = st.tasks.filter(t => t.date === today());
+            const dueReviews = st.units.filter(u => u.nextReview <= today());
+
+            const handleComplete = (task, rating) => {
+                setSt(s => {
+                    let units = [...s.units];
+                    if(task.type === 'NEW_MEMORIZATION') units.push({id:Date.now(), ...task, lastInterval: reviewEngine({}, rating).nextInterval, nextReview: reviewEngine({}, rating).nextReview});
+                    const tasks = s.tasks.map(t => (t.date === task.date && t.type === task.type) ? {...t, status:'COMPLETED'}:t);
+                    return {...s, units, tasks};
+                });
+            };
+
+            return (
+                <div className="app" dir="rtl">
+                    <style>{CSS}</style>
+                    <header className="topbar"><h1>وِرد v4</h1><div className="badge"><b>{ar(st.streak.current)}</b><span>يوم</span></div></header>
+                    {!st.plan ? <PlanWizard onComplete={p=>setSt({...st, plan:p, tasks:generatePlanTasks(p)})} /> : (
+                        <div className="screen">
+                            {tab==='home' && <>
+                                <h3>مهام اليوم</h3>
+                                {dueReviews.map(u => <div key={u.id} className="task-card rev"><div>{surahName(u.startSurah)}</div><button onClick={()=>handleComplete(u, 4)}>تم</button></div>)}
+                                {todayTasks.filter(t=>t.status==='PENDING').map((t,i) => <div key={i} className="task-card mem"><div>{surahName(t.startSurah)} {ar(t.startAyah)}-{ar(t.endAyah)}</div><button onClick={()=>handleComplete(t, 4)}>تم</button></div>)}
+                            </>}
+                            {tab==='stats' && <div className="card"><h3>الإنجاز</h3><div className="stat"><b>{ar(st.units.length)}</b><span>وحدات محفوظة</span></div></div>}
+                            <nav className="bottomnav">
+                                <button onClick={()=>setTab('home')}>اليوم</button>
+                                <button onClick={()=>setTab('stats')}>الإحصاء</button>
+                                <button onClick={()=>{localStorage.clear(); location.reload();}}>إعادة</button>
+                            </nav>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const CSS = `
+            body{ --bg:#0E1726; --surface:#152139; --surface-2:#1D2E4B; --primary:#C9A227; --text:#EFE7D5; --text-dim:#A8AEBD; background:var(--bg); color:var(--text); }
+            .topbar{ display:flex; justify-content:space-between; padding:20px; align-items:center; }
+            .badge{ background:var(--surface-2); padding:5px 15px; border-radius:15px; text-align:center; border:1px solid var(--primary); }
+            .screen{ padding:20px; }
+            .card{ background:var(--surface); border-radius:20px; padding:20px; border:1px solid rgba(201,162,39,0.1); margin-bottom:15px; }
+            .wizard{ max-width:500px; margin:20px auto; }
+            .step-content{ display:flex; flex-direction:column; gap:10px; margin:20px 0; }
+            .btn{ border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; }
+            .btn.primary{ background:var(--primary); color:#1A1206; }
+            .btn.ghost{ background:none; color:white; border:1px solid var(--surface-2); }
+            .task-card{ background:var(--surface); padding:15px; border-radius:15px; margin-bottom:10px; display:flex; justify-content:space-between; border-right:5px solid var(--primary); }
+            .task-card.rev{ border-right-color: #5B8FC7; }
+            .bottomnav{ position:fixed; bottom:0; left:0; right:0; background:var(--surface); display:flex; padding:15px; gap:10px; }
+            .bottomnav button{ flex:1; background:none; border:none; color:white; font-weight:bold; cursor:pointer; }
+            select, input{ background:var(--bg); border:1px solid var(--surface-2); color:white; padding:10px; border-radius:10px; }
+            .day-config{ display:flex; justify-content:space-between; padding:5px 0; }
+        `;
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

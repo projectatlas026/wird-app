@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>وِرد v7 — المحرك المتين</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #0E1726; color: #EFE7D5; font-family: sans-serif; }
+        #root { min-height: 100vh; }
+        .boot { display: grid; place-items: center; height: 100vh; font-size: 20px; }
+    </style>
+</head>
+<body>
+    <div id="root"><div class="boot">جاري تحميل المحرك v7...</div></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+        const SURAH_NAMES = ["الفاتحة","البقرة","آل عمران","النساء","المائدة","الأنعام","الأعراف","الأنفال","التوبة","يونس","هود","يوسف","الرعد","إبراهيم","الحجر","النحل","الإسراء","الكهف","مريم","طه","الأنبياء","الحج","المؤمنون","النور","الفرقان","الشعراء","النمل","القصص","العنكبوت","الروم","لقمان","السجدة","الأحزاب","سبأ","فاطر","يس","الصافات","ص","الزمر","غافر","فصلت","الشورى","الزخرف","الدخان","الجاثية","الأحقاف","محمد","الفتح","الحجرات","ق","الذاريات","الطور","النجم","القمر","الرحمن","الواقعة","الحديد","المجادلة","الحشر","الممتحنة","الصف","الجمعة","المنافقون","التغابن","الطلاق","التحريم","الملك","القلم","الحاقة","المعارج","نوح","الجن","المزمل","المدثر","القيامة","الإنسان","المرسلات","النبأ","النازعات","عبس","التكوير","الانفطار","المطففين","الانشقاق","البروج","الطارق","الأعلى","الغاشية","الفجر","البلد","الشمس","الليل","الضحى","الشرح","التين","العلق","القدر","البينة","الزلزلة","العاديات","القارعة","التكاثر","العصر","الهمزة","الفيل","قريش","الماعون","الكوثر","الكافرون","النصر","المسد","الإخلاص","الفلق","الناس"];
+        const AYAH_COUNTS = [7,286,200,176,120,165,206,75,129,109,123,111,43,52,99,128,111,110,98,135,112,78,118,64,77,227,93,88,69,60,34,30,73,54,45,83,182,88,75,85,54,53,89,59,37,35,38,29,18,45,60,49,62,55,78,96,29,22,24,13,14,11,11,18,12,12,30,52,52,44,28,28,20,56,40,31,50,40,46,42,29,19,36,25,22,17,19,26,30,20,15,21,11,8,8,19,5,8,8,11,11,8,3,9,5,4,7,3,6,3,5,4,5,6];
+        const JUZ_STARTS = [[1,1],[2,142],[2,253],[3,93],[4,24],[4,148],[5,82],[6,111],[7,88],[8,41],[9,93],[11,6],[12,53],[15,1],[17,1],[18,75],[21,1],[23,1],[25,21],[27,56],[29,46],[33,31],[36,28],[39,32],[41,47],[46,1],[51,31],[58,1],[67,1],[78,1]];
+        const HIZB_STARTS = [[1,1],[2,75],[2,142],[2,203],[2,253],[3,15],[3,93],[3,171],[4,24],[4,88],[4,148],[5,27],[5,82],[6,36],[6,111],[7,1],[7,88],[7,171],[8,41],[9,34],[9,93],[10,26],[11,6],[11,84],[12,53],[13,19],[15,1],[16,51],[17,1],[17,100],[18,75],[19,59],[21,1],[22,38],[23,1],[24,21],[25,21],[26,111],[27,56],[29,1],[29,46],[31,22],[33,31],[34,24],[36,28],[38,21],[39,32],[40,41],[41,47],[43,24],[46,1],[48,18],[51,31],[54,9],[58,1],[61,1],[67,1],[72,1],[78,1],[87,1]];
+
+        const ar = (n) => String(n);
+        const today = () => new Date().toISOString().slice(0, 10);
+        const addDays = (s, n) => new Date((Math.floor(Date.parse(s + "T00:00:00Z") / 86400000) + n) * 86400000).toISOString().slice(0, 10);
+        const diffDays = (a, b) => Math.floor((Date.parse(a + "T00:00:00Z") - Date.parse(b + "T00:00:00Z")) / 86400000);
+        const WEEKDAYS = ["الأحد","الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت"];
+        const weekdayOf = (ds) => new Date(ds + "T00:00:00Z").getUTCDay();
+
+        const QuranGoalResolutionService = {
+            getAyahRange(s1, a1, s2, a2) {
+                const ranges = [];
+                for (let s = s1; s <= s2; s++) {
+                    const first = (s === s1) ? a1 : 1;
+                    const last = (s === s2) ? a2 : AYAH_COUNTS[s - 1];
+                    for (let a = first; a <= last; a++) ranges.push({ s, a });
+                }
+                return ranges;
+            },
+            resolve(form) {
+                let s1, a1, s2, a2;
+                if (form.goalType === 'FULL_QURAN') [s1, a1, s2, a2] = [1, 1, 114, 6];
+                else if (form.goalType === 'JUZ_RANGE') {
+                    [s1, a1] = JUZ_STARTS[form.startJuz - 1];
+                    const end = form.endJuz === 30 ? [114, 7] : JUZ_STARTS[form.endJuz];
+                    [s2, a2] = (end[1] > 1) ? [end[0], end[1] - 1] : [end[0] - 1, AYAH_COUNTS[end[0] - 2]];
+                } else if (form.goalType === 'HIZB_RANGE') {
+                    [s1, a1] = HIZB_STARTS[form.startHizb - 1];
+                    const end = form.endHizb === 60 ? [114, 7] : HIZB_STARTS[form.endHizb];
+                    [s2, a2] = (end[1] > 1) ? [end[0], end[1] - 1] : [end[0] - 1, AYAH_COUNTS[end[0] - 2]];
+                } else [s1, a1, s2, a2] = [form.startSurah, form.startAyah, form.endSurah, form.endAyah];
+                return { s1, a1, s2, a2 };
+            }
+        };
+
+        function generatePlan(p, ranges) {
+            const tasks = []; let ayahIdx = 0; let curD = p.startDate;
+            const countW = (s, e, sch) => { let c = 0; let d = s; while (diffDays(e, d) >= 0) { if (sch[weekdayOf(d)] === 'mem') c++; d = addDays(d, 1); } return c; };
+            const workDaysT = p.mode === 'date' ? countW(p.startDate, p.targetEndDate, p.schedule) : 0;
+            let workDayC = 0;
+            while (ayahIdx < ranges.length && tasks.length < 1500) {
+                const dayType = p.schedule[weekdayOf(curD)];
+                const id = Math.random().toString(36).slice(2, 9);
+                if (dayType === 'mem') {
+                    workDayC++;
+                    let amt = p.dailyAmount;
+                    if (p.mode === 'date') amt = Math.ceil((ranges.length - ayahIdx) / Math.max(1, workDaysT - workDayC + 1));
+                    const st = ranges[ayahIdx]; const enIdx = Math.min(ranges.length - 1, ayahIdx + amt - 1); const en = ranges[enIdx];
+                    tasks.push({ id, date: curD, type: 'MEM', s1: st.s, a1: st.a, s2: en.s, a2: en.a, status: 'PENDING' });
+                    ayahIdx = enIdx + 1;
+                } else if (dayType === 'rev') tasks.push({ id, date: curD, type: 'REV', status: 'PENDING' });
+                curD = addDays(curD, 1);
+            }
+            return tasks;
+        }
+
+        function Wizard({ onComplete }) {
+            const [step, setStep] = useState(1);
+            const [form, setForm] = useState({
+                goalType: 'JUZ_RANGE', startJuz: 30, endJuz: 30, startHizb: 59, endHizb: 60,
+                startSurah: 78, startAyah: 1, endSurah: 114, endAyah: 6,
+                startDate: today(), targetEndDate: addDays(today(), 30), dailyAmount: 5, mode: 'date',
+                schedule: { 0: 'rev', 1: 'mem', 2: 'mem', 3: 'mem', 4: 'mem', 5: 'mem', 6: 'rev' }
+            });
+            const error = step === 2 && form.goalType==='JUZ_RANGE' && form.endJuz<form.startJuz ? "النطاق غير صحيح" : null;
+            return (
+                <div className="wizard card">
+                    <div className="wizard-header"><h2>الخطوة {ar(step)} من 4</h2></div>
+                    <div className="step-content">
+                        {step === 1 && ['FULL_QURAN','JUZ_RANGE','AYAH_RANGE'].map(t => <button key={t} className={form.goalType===t?'opt on':'opt'} onClick={()=>setForm({...form, goalType:t})}>{t==='FULL_QURAN'?'القرآن كاملاً':t==='JUZ_RANGE'?'بالأجزاء':'آيات محددة'}</button>)}
+                        {step === 2 && form.goalType==='JUZ_RANGE' && <div className="row"><select value={form.startJuz} onChange={e=>setForm({...form, startJuz:+e.target.value})}>{Array.from({length:30},(_,i)=><option key={i+1} value={i+1}>جزء {ar(i+1)}</option>)}</select><select value={form.endJuz} onChange={e=>setForm({...form, endJuz:+e.target.value})}>{Array.from({length:30},(_,i)=><option key={i+1} value={i+1}>إلى جزء {ar(i+1)}</option>)}</select></div>}
+                        {step === 3 && <>
+                            <input type="date" value={form.startDate} onChange={e=>setForm({...form, startDate:e.target.value})} />
+                            <div className="seg-control"><button className={form.mode==='date'?'on':''} onClick={()=>setForm({...form, mode:'date'})}>تاريخ انتهاء</button><button className={form.mode==='amount'?'on':''} onClick={()=>setForm({...form, mode:'amount'})}>مقدار ثابت</button></div>
+                            {form.mode==='date'?<input type="date" value={form.targetEndDate} onChange={e=>setForm({...form, targetEndDate:e.target.value})} /> : <input type="number" value={form.dailyAmount} onChange={e=>setForm({...form, dailyAmount:+e.target.value})} />}
+                            <div className="schedule-grid">{WEEKDAYS.map((d,i)=><button key={i} className={`day-btn ${form.schedule[i]}`} onClick={()=>{const n={mem:'rev',rev:'rest',rest:'mem'}[form.schedule[i]];setForm({...form, schedule:{...form.schedule,[i]:n}});}}>{d.slice(0,1)}</button>)}</div>
+                        </>}
+                        {step === 4 && <p>سيتم توليد المهام بناءً على أيام العمل المختارة.</p>}
+                    </div>
+                    {error && <div className="error">{error}</div>}
+                    <div className="footer">
+                        {step>1 && <button className="btn ghost" onClick={()=>setStep(s=>s-1)}>السابق</button>}
+                        <button className="btn primary" disabled={!!error} onClick={step<4?()=>setStep(s=>s+1):()=>{const r=QuranGoalResolutionService.resolve(form); onComplete({...form,...r,tasks:generatePlan(form,QuranGoalResolutionService.getAyahRange(r.s1,r.a1,r.s2,r.a2))})}}>{step<4?'التالي':'بدء'}</button>
+                    </div>
+                </div>
+            );
+        }
+
+        function App() {
+            const [st, setSt] = useState(null);
+            useEffect(() => { try { const s = localStorage.getItem("wird_v7"); setSt(s?JSON.parse(s):{plan:null, units:[], streak:0}); } catch { setSt({plan:null, units:[], streak:0}); } }, []);
+            useEffect(() => { if(st) localStorage.setItem("wird_v7", JSON.stringify(st)); }, [st]);
+            if(!st) return null;
+            const todayT = st.plan?st.plan.tasks.filter(t=>t.date===today()&&t.status!=='DONE'):[];
+            const reviewT = st.units.filter(u=>u.nextReview<=today());
+            return (
+                <div className="app" dir="rtl">
+                    <style>{CSS}</style>
+                    <header className="topbar"><h1>وِرد v7</h1><div className="badge"><b>{ar(st.streak)}</b><span>يوم</span></div></header>
+                    {!st.plan ? <Wizard onComplete={p=>setSt({...st, plan:p})} /> : (
+                        <div className="screen">
+                            <h3>مهام اليوم</h3>
+                            {reviewT.map((u,i)=><div key={'r'+i} className="task-card REV_DUE"><div>مراجعة: {SURAH_NAMES[u.s1-1]}</div><button onClick={()=>setSt(s=>({...s, units:s.units.map(x=>x.id===u.id?{...x,nextReview:addDays(today(),7)}:x)}))}>تم</button></div>)}
+                            {todayT.map(t=><div key={t.id} className="task-card"><div>{t.s1===t.s2?`${SURAH_NAMES[t.s1-1]} (${ar(t.a1)}-${ar(t.a2)})`:`من ${SURAH_NAMES[t.s1-1]} إلى ${SURAH_NAMES[t.s2-1]}`}</div><button onClick={()=>{
+                                const tasks = st.plan.tasks.map(x=>x.id===t.id?{...x,status:'DONE'}:x);
+                                setSt({...st, streak:st.streak+1, units:[...st.units,{...t,nextReview:addDays(today(),3)}], plan:{...st.plan, tasks}, lastActivity:today()});
+                            }}>تم</button></div>)}
+                            <nav className="bottomnav"><button onClick={()=>{localStorage.clear();location.reload();}}>إعادة الخطة</button></nav>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const CSS = `
+            body{ --bg:#0E1726; --surface:#152139; --primary:#C9A227; --text:#EFE7D5; background:var(--bg); color:var(--text); }
+            .topbar{ display:flex; justify-content:space-between; padding:20px; align-items:center; border-bottom:1px solid #1D2E4B; }
+            .badge{ background:#1D2E4B; padding:5px 15px; border-radius:15px; border:1px solid var(--primary); }
+            .card{ background:var(--surface); border-radius:20px; padding:20px; margin:15px; border:1px solid rgba(201,162,39,0.1); }
+            .wizard{ max-width:400px; margin:0 auto; }
+            .step-content{ margin:20px 0; display:flex; flex-direction:column; gap:10px; }
+            select, input{ background:var(--bg); color:white; padding:12px; border:1px solid #1D2E4B; border-radius:10px; }
+            .btn{ border:none; padding:12px; border-radius:10px; cursor:pointer; font-weight:bold; }
+            .btn.primary{ background:var(--primary); }
+            .btn.ghost{ background:none; color:white; border:1px solid #1D2E4B; }
+            .opt{ background:#1D2E4B; color:white; padding:15px; border-radius:12px; text-align:right; border:1px solid transparent; width:100%; cursor:pointer; }
+            .opt.on{ border-color:var(--primary); background:rgba(201,162,39,0.1); }
+            .row{ display:flex; gap:10px; } .row select, .row input{ flex:1; }
+            .schedule-grid{ display:flex; gap:5px; margin-top:10px; }
+            .day-btn{ flex:1; height:40px; border-radius:10px; border:none; color:white; font-weight:bold; }
+            .day-btn.mem{ background:#3F8F7E; } .day-btn.rev{ background:#5B8FC7; } .day-btn.rest{ background:#3B4554; }
+            .task-card{ background:var(--surface); padding:15px; border-radius:15px; margin:10px; display:flex; justify-content:space-between; border-right:4px solid var(--primary); }
+            .task-card.REV_DUE{ border-right-color:#5B8FC7; }
+            .bottomnav{ position:fixed; bottom:0; left:0; right:0; background:var(--surface); padding:15px; text-align:center; }
+            .seg-control{ display:flex; background:var(--bg); padding:5px; border-radius:10px; }
+            .seg-control button{ flex:1; background:none; border:none; color:white; padding:10px; border-radius:8px; }
+            .seg-control button.on{ background:#1D2E4B; color:var(--primary); }
+            .error{ color:#B4574C; text-align:center; font-size:12px; }
+        `;
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
